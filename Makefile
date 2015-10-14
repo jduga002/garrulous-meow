@@ -17,3 +17,6 @@ main.o: main.cpp minigl.h
 
 clean:
 	$(RM) *~ *.bak *.o $(EXEC)
+
+onlocal: minigl.o
+	$(CXX) -g -O2 -Wall main.cpp -L/usr/X11R6/lib -lGL -lglut minigl.o -o minigl
