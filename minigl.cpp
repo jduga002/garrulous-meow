@@ -1,3 +1,4 @@
+#include <iostream>
 /**
  * minigl.cpp
  * -------------------------------
@@ -7,10 +8,10 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 #include "minigl.h"
 
 using namespace std;
-
 
 /**
  * Standard macro to report errors
@@ -20,6 +21,282 @@ inline void MGL_ERROR(const char* description) {
     exit(1);
 }
 
+/**
+ * Error messages
+ */
+const char* GL_BEGIN_ERROR = "ERROR: mglBegin already called. Must use function after call to mglEnd";
+const char* GL_END_ERROR = "ERROR: mglBegin not called";
+const MGLfloat identity[16] = {1,0,0,0,
+                               0,1,0,0,
+                               0,0,1,0,
+                               0,0,0,1};
+
+class MGLObject {
+    bool mglBeginCalled;
+    MGLpoly_mode mglPoly_Mode;
+    MGLmatrix_mode mglMatrix_Mode;
+
+    vector<MGLfloat> vertexList;
+    vector< vector<MGLfloat> > projection_matrixStack;
+    vector< vector<MGLfloat> > modelview_matrixStack;
+
+    MGLbyte currentColor[3];
+  public:
+    MGLObject()
+     : mglBeginCalled(false), projection_matrixStack(1), modelview_matrixStack(1) {
+        vector<MGLfloat> id(identity, identity + 16);
+        projection_matrixStack.at(0) = id;
+        modelview_matrixStack.at(0) = id;
+
+        currentColor[0] = 1;
+        currentColor[1] = 1;
+        currentColor[2] = 1;
+    }
+    
+    void readPixels(MGLsize width,
+                       MGLsize height,
+                       MGLpixel *data) {
+        cout << "Reading pixels" << endl;
+        //TODO: also do quadrilaterals
+        unsigned num_triangles = vertexList.size() / 9;
+        cout << "num pixels:\t" << vertexList.size() << endl;
+        for (unsigned i = 0; i < num_triangles; i += 9) {
+           draw_triangle(vertexList.at(i), vertexList.at(i+1),
+                         vertexList.at(i+2), vertexList.at(i+3),
+                         vertexList.at(i+4), vertexList.at(i+5),
+                         vertexList.at(i+6), vertexList.at(i+7),
+                         vertexList.at(i+8), width, height, data);
+        } 
+        for (unsigned i = 0; i < width*height; i++ ) {
+            if (data[i] != 0)
+                cout << "Pixel " << i << ":\t" << data[i] << endl;
+        }
+        MGLpixel pixel = 0;
+        MGL_SET_RED(pixel, 255);
+        MGL_SET_GREEN(pixel, 255);
+        MGL_SET_BLUE(pixel, 255);
+        cout << "pixel:\t" << pixel << endl;
+        data[250] = pixel;
+    }
+   
+    void begin(MGLpoly_mode mode) {
+        if (mglBeginCalled) {
+            MGL_ERROR(GL_BEGIN_ERROR);
+        }
+        mglBeginCalled = true;
+        mglPoly_Mode = mode;
+    }
+    
+    void end() {
+        if (!mglBeginCalled) {
+            MGL_ERROR(GL_END_ERROR);
+        }
+        mglBeginCalled = false;
+    }
+
+    void vertex3(MGLfloat x,
+                    MGLfloat y,
+                    MGLfloat z) {
+        if (mglBeginCalled) {
+            vertexList.push_back(x);
+            vertexList.push_back(y);
+            vertexList.push_back(z);
+        }
+    }
+    void setMatrixMode(MGLmatrix_mode mode) {
+        mglMatrix_Mode = mode;
+    }
+    void pushMatrix() {
+        if (mglMatrix_Mode == MGL_MODELVIEW) {
+            vector<MGLfloat> back = modelview_matrixStack.back();
+            modelview_matrixStack.push_back(back);
+        }
+        else if (mglMatrix_Mode == MGL_PROJECTION) {
+            vector<MGLfloat> back = projection_matrixStack.back();
+            projection_matrixStack.push_back(back);
+        }
+    }
+    void popMatrix() {
+        if (mglMatrix_Mode == MGL_MODELVIEW) {
+            if (modelview_matrixStack.size() > 1) {
+                modelview_matrixStack.pop_back();
+            }
+        }
+        else if (mglMatrix_Mode == MGL_PROJECTION) {
+            projection_matrixStack.pop_back();
+        }
+    }
+    void loadIdentity() {
+        loadMatrix(identity);
+    }
+    void loadMatrix(const MGLfloat *matrix) {
+        if (mglBeginCalled) {
+            MGL_ERROR(GL_BEGIN_ERROR);
+        }
+        vector<MGLfloat> matrix_vec(matrix, matrix + 16);
+        if (mglMatrix_Mode == MGL_MODELVIEW) {
+            modelview_matrixStack.back() = matrix_vec;
+        }
+        else if (mglMatrix_Mode == MGL_PROJECTION) {
+            projection_matrixStack.back() = matrix_vec;
+        }
+    }
+    void multMatrix(const MGLfloat *matrix) {
+        if (mglBeginCalled) {
+            MGL_ERROR(GL_BEGIN_ERROR);
+        }
+        vector<MGLfloat> mult_matrix(16);
+        vector<MGLfloat> *back = NULL;
+        if (mglMatrix_Mode == MGL_MODELVIEW)
+            back = &(modelview_matrixStack.back());
+        else if (mglMatrix_Mode == MGL_PROJECTION)
+            back = &(projection_matrixStack.back());
+        for (unsigned i = 0; i < 4; i++) {
+            for (unsigned j = 0; i < 4; i++) {
+                MGLfloat sum = 0.0;
+                for (unsigned k = 0; k < 4; k++) {
+                    sum += (back->at(i+4*k))*(matrix[k+4*j]);
+                }
+                mult_matrix.at(i+4*j) = sum;
+            }
+        }
+        *(back) = mult_matrix;
+    }
+
+    void translate(MGLfloat x,
+                   MGLfloat y,
+                   MGLfloat z) {
+        //TODO: Implement me!!
+        MGLfloat trans_matrix[16] = {1,0,0,0,
+                                     0,1,0,0,
+                                     0,0,1,0,
+                                     x,y,z,1};
+        multMatrix(trans_matrix);
+    }
+    void rotate(MGLfloat angle,
+                   MGLfloat x,
+                   MGLfloat y,
+                   MGLfloat z) {
+        //TODO: Implement me!!
+    }
+    void scale(MGLfloat x,
+                  MGLfloat y,
+                  MGLfloat z) {
+        //TODO: Implement me!!
+    }
+    void frustum(MGLfloat left,
+                    MGLfloat right,
+                    MGLfloat bottom,
+                    MGLfloat top,
+                    MGLfloat near,
+                    MGLfloat far) {
+        //TODO: Implement me!!
+    }
+    void ortho(MGLfloat left,
+                  MGLfloat right,
+                  MGLfloat bottom,
+                  MGLfloat top,
+                  MGLfloat near,
+                  MGLfloat far) {
+        //TODO: Implement me!!
+    }
+    void color(MGLbyte red,
+                  MGLbyte green,
+                  MGLbyte blue) {
+        //TODO: Implement me!!
+        //MGLbyte *currentColor = mgl.getCurrentColor();
+        //currentColor[0] = red;
+        //currentColor[1] = green;
+        //currentColor[2] = blue;
+    }
+    void set_pixel(int x, int y, unsigned width, unsigned height, MGLpixel *data) {
+    //unsigned index = y*width + x;
+    unsigned index = x*height + y;
+    if (index < width*height) {
+        MGLpixel pixel = 0;
+        MGL_SET_RED(pixel, 255);
+        MGL_SET_GREEN(pixel, 255);
+        MGL_SET_BLUE(pixel, 255);
+        data[index] = pixel;
+    }
+}
+
+void draw_line(int x0, int y0, int x1, int y1, unsigned width, unsigned height, MGLpixel* data)
+{
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    
+    if (dx == 0) {
+        if (dy == 0) {
+            set_pixel(x0, y0, width, height, data);
+            return;
+        }
+        int x = x0;
+        if (dy > 0) {
+            for (int y = y0; y < y1; y++)
+                set_pixel(x, y, width, height, data);
+        }
+        else if (dy < 0) {
+            for (int y = y0; y > y1; y--)
+                set_pixel(x, y, width, height, data);
+        }
+        return;
+    }
+
+    float m = dy/dx;
+    
+    if (m <= 1 && m >= -1) {
+        if (dx > 0) {
+            float y = y0;
+            for(int x = x0; x < x1; ++x) {
+                set_pixel(x, static_cast<int>(y + 0.5), width, height, data);
+                y += m;
+            }
+         }
+
+        else if (dx < 0) {
+            float y = y0;
+            for(int x = x0; x > x1; --x) {
+                set_pixel(x, static_cast<int>(y + 0.5), width, height, data);
+                y -= m;
+            }
+        }
+    }
+    else { // absolute value of slope is greater than 1
+        // dy != 0 so we do not need to check it
+        float m_inverse = dx/dy; // 1/m
+        float x = x0;
+        if (dy > 0) {
+            for (int y = y0; y < y1; ++y) {
+                 set_pixel(static_cast<int>(x + 0.5), y, width, height, data);
+                 x += m_inverse;
+            }
+        }
+        else { // dy < 0
+            for (int y = y0; y > y1; --y) {
+                 set_pixel(static_cast<int>(x + 0.5), y, width, height, data);
+                 x -= m_inverse;
+            }
+        }
+    }
+
+    return;
+}
+
+/**
+ * Helper function for drawing triangles
+ */
+void draw_triangle(const int &x1, const int &y1, const int &z1,
+                   const int &x2, const int &y2, const int &z2,
+                   const int &x3, const int &y3, const int &z3,
+                   const int width, const int height, MGLpixel* data) {
+    draw_line(x1, y1, x2, y2, width, height, data);
+    draw_line(x3, y3, x2, y2, width, height, data);
+    draw_line(x1, y1, x3, y3, width, height, data);
+}
+};
+
+static MGLObject mgl;
 
 /**
  * Read pixel data starting with the pixel at coordinates
@@ -37,6 +314,7 @@ void mglReadPixels(MGLsize width,
                    MGLsize height,
                    MGLpixel *data)
 {
+    mgl.readPixels(width, height, data);
 }
 
 /**
@@ -45,6 +323,7 @@ void mglReadPixels(MGLsize width,
  */
 void mglBegin(MGLpoly_mode mode)
 {
+    mgl.begin(mode);
 }
 
 /**
@@ -52,6 +331,7 @@ void mglBegin(MGLpoly_mode mode)
  */
 void mglEnd()
 {
+    mgl.end();
 }
 
 /**
@@ -63,6 +343,7 @@ void mglEnd()
 void mglVertex2(MGLfloat x,
                 MGLfloat y)
 {
+    mglVertex3(x, y, 0.0);
 }
 
 /**
@@ -73,6 +354,7 @@ void mglVertex3(MGLfloat x,
                 MGLfloat y,
                 MGLfloat z)
 {
+    mgl.vertex3(x,y,z);
 }
 
 /**
@@ -80,6 +362,7 @@ void mglVertex3(MGLfloat x,
  */
 void mglMatrixMode(MGLmatrix_mode mode)
 {
+    mgl.setMatrixMode(mode);
 }
 
 /**
@@ -88,6 +371,7 @@ void mglMatrixMode(MGLmatrix_mode mode)
  */
 void mglPushMatrix()
 {
+    mgl.pushMatrix();
 }
 
 /**
@@ -96,6 +380,7 @@ void mglPushMatrix()
  */
 void mglPopMatrix()
 {
+    mgl.popMatrix();
 }
 
 /**
@@ -103,6 +388,7 @@ void mglPopMatrix()
  */
 void mglLoadIdentity()
 {
+    mgl.loadIdentity();
 }
 
 /**
@@ -119,6 +405,7 @@ void mglLoadIdentity()
  */
 void mglLoadMatrix(const MGLfloat *matrix)
 {
+    mgl.loadMatrix(matrix);
 }
 
 /**
@@ -135,6 +422,7 @@ void mglLoadMatrix(const MGLfloat *matrix)
  */
 void mglMultMatrix(const MGLfloat *matrix)
 {
+    mgl.multMatrix(matrix);
 }
 
 /**
@@ -145,6 +433,7 @@ void mglTranslate(MGLfloat x,
                   MGLfloat y,
                   MGLfloat z)
 {
+    mgl.translate(x,y,z);
 }
 
 /**
@@ -157,6 +446,7 @@ void mglRotate(MGLfloat angle,
                MGLfloat y,
                MGLfloat z)
 {
+    mgl.rotate(angle, x, y, z);
 }
 
 /**
@@ -167,6 +457,7 @@ void mglScale(MGLfloat x,
               MGLfloat y,
               MGLfloat z)
 {
+    mgl.scale(x,y,z);
 }
 
 /**
@@ -180,6 +471,7 @@ void mglFrustum(MGLfloat left,
                 MGLfloat near,
                 MGLfloat far)
 {
+    mgl.frustum(left,right,bottom,top,near,far);
 }
 
 /**
@@ -193,6 +485,7 @@ void mglOrtho(MGLfloat left,
               MGLfloat near,
               MGLfloat far)
 {
+    mgl.ortho(left,right,bottom,top,near,far);
 }
 
 /**
@@ -202,4 +495,5 @@ void mglColor(MGLbyte red,
               MGLbyte green,
               MGLbyte blue)
 {
+    mgl.color(red,green,blue);
 }
