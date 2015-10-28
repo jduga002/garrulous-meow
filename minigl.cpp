@@ -70,6 +70,12 @@ class vertex {
         MGL_SET_BLUE(color, blue);
         this->color = color;
     }
+    void applyW() {
+        x /= w;
+        y /= w;
+        z /= w;
+        w = 1;
+    }
 };
 
 //matrix must be 4x4
@@ -153,7 +159,6 @@ class MGLObject {
                 mult_matrix_vec(view_trans_matrix, *vIter, vIter->x, vIter->y, vIter->z, vIter->w);
             }
         }
-        cout << "Reading pixels" << endl;
         for (unsigned i = 0; i < polygonList.size(); i += 9) {
             MGL_Polygon &polygon = polygonList.at(i);
             if (polygon.polyType() == TRIANGLE) {
@@ -167,16 +172,12 @@ class MGLObject {
                               polygon.getVertices().at(1),
                               polygon.getVertices().at(2),
                               width, height, data);
-                draw_triangle(polygon.getVertices().at(1),
+                draw_triangle(polygon.getVertices().at(0),
                               polygon.getVertices().at(2),
                               polygon.getVertices().at(3),
                               width, height, data);
             }
         } 
-        for (unsigned i = 0; i < width*height; i++ ) {
-            if (data[i] != 0)
-                cout << "Pixel " << i << ":\t" << data[i] << endl;
-        }
     }
    
     void begin(MGLpoly_mode mode) {
@@ -223,6 +224,7 @@ class MGLObject {
             //multiply by projection matrix,
             vertex v(0.0,0.0,0.0);
             mult_matrix_vec(proj_matrix,v, x,y,z,1);
+            v.applyW();
             cerr << "projection matrix:" << endl;
             for (unsigned i = 0; i < 16; i++) {
                 cerr << proj_matrix.at(i) << " ";
@@ -287,11 +289,6 @@ class MGLObject {
         }
     }
     void multMatrix(const MGLfloat *matrix) {
-        cerr << "Matrix to be multiplied:" << endl;
-        for (unsigned i = 0; i < 16; i++) {
-            cerr << matrix[i] << " ";
-        }
-        cerr << endl;
         if (mglBeginCalled) {
             MGL_ERROR(GL_BEGIN_ERROR);
         }
@@ -301,11 +298,6 @@ class MGLObject {
             back = &(modelview_matrixStack.back());
         else if (mglMatrix_Mode == MGL_PROJECTION)
             back = &(projection_matrixStack.back());
-        cerr << "back matrix:" << endl;
-        for (unsigned i = 0; i < 16; i++) {
-            cerr << back->at(i) << " ";
-        }
-        cerr << endl;
         for (unsigned i = 0; i < 4; i++) {
             for (unsigned j = 0; j < 4; j++) {
                 MGLfloat sum = 0.0;
@@ -313,14 +305,8 @@ class MGLObject {
                     sum += (back->at(i+4*k))*(matrix[k+4*j]);
                 }
                 mult_matrix.at(i+4*j) = sum;
-                cerr << "mult_matrix[" << i << "," << j << "] = " << mult_matrix.at(i+4*j) << endl;
             }
         }
-        cerr << "Multiplied matrix:" << endl;
-        for (unsigned i = 0; i < mult_matrix.size(); i++) {
-            cerr << mult_matrix.at(i) << " ";
-        }
-        cerr << endl;
         loadMatrix(&mult_matrix[0]);
     }
 
