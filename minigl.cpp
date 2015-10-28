@@ -30,6 +30,7 @@ const MGLfloat identity[16] = {1,0,0,0,
                                0,1,0,0,
                                0,0,1,0,
                                0,0,0,1};
+
 class vertex {
   public:
     MGLfloat x;
@@ -44,9 +45,11 @@ class vertex {
         setValues(x,y,z,1);
         setColor(red,green,blue);
     }
-    vertex(const vertex& other)
-     : color(other.color) {
-        setValues(other.x, other.y, other.z, 1);
+    vertex(MGLfloat x, MGLfloat y, MGLfloat z) {
+        setValues(x,y,z,1);
+    }
+    vertex(MGLfloat x, MGLfloat y, MGLfloat z, MGLfloat w) {
+        setValues(x,y,z,w);
     }
     void setValues(int x, int y, int z) {
         this->x = x;
@@ -68,6 +71,18 @@ class vertex {
         this->color = color;
     }
 };
+
+//matrix must be 4x4
+void mult_matrix_vec(vector<MGLfloat> &m, vertex &v, MGLfloat x, MGLfloat y, MGLfloat z, MGLfloat w) {
+    v.x = m.at(0)*x+m.at(4)*y+m.at(8)*z+m.at(12)*w;
+    v.y = m.at(1)*x+m.at(5)*y+m.at(9)*z+m.at(13)*w;
+    v.z = m.at(2)*x+m.at(6)*y+m.at(10)*z+m.at(14)*w;
+    v.w = m.at(3)*x+m.at(7)*y+m.at(11)*z+m.at(15)*w;
+    cerr << "x prime:\t" << v.x << endl;
+    cerr << "y prime:\t" << v.y << endl;
+    cerr << "z prime:\t" << v.z << endl;
+    cerr << "w prime:\t" << v.w << endl;
+}
 
 #define TRIANGLE 3
 #define QUADRILATERAL 4
@@ -124,8 +139,21 @@ class MGLObject {
     void readPixels(MGLsize width,
                        MGLsize height,
                        MGLpixel *data) {
+        vector<MGLfloat> view_trans_matrix(16,0);
+        view_trans_matrix.at(0) = width/2;
+        view_trans_matrix.at(5) = height/2;
+        view_trans_matrix.at(10) = 1;
+        view_trans_matrix.at(12) = (width-1)/2;
+        view_trans_matrix.at(13) = (height-1)/2;
+        view_trans_matrix.at(15) = 1;
+        for (vector<MGL_Polygon>::iterator pIter = polygonList.begin();
+             pIter != polygonList.end(); pIter++) {
+            for (vector<vertex>::iterator vIter = pIter->getVertices().begin();
+                 vIter != pIter->getVertices().end(); vIter++) {
+                mult_matrix_vec(view_trans_matrix, *vIter, vIter->x, vIter->y, vIter->z, vIter->w);
+            }
+        }
         cout << "Reading pixels" << endl;
-        //TODO: also do quadrilaterals
         for (unsigned i = 0; i < polygonList.size(); i += 9) {
             MGL_Polygon &polygon = polygonList.at(i);
             if (polygon.polyType() == TRIANGLE) {
@@ -185,17 +213,39 @@ class MGLObject {
     void vertex3(MGLfloat x,
                     MGLfloat y,
                     MGLfloat z) {
+        cerr << "Vertex: " << endl;
+        cerr << "x:\t" << x << endl
+             << "y:\t" << y << endl
+             << "z:\t" << z << endl;
         if (mglBeginCalled) {
-            MGLfloat vertice[4] = {x,y,z,1};
             //multiply by camera matrix, which in this case is just identity
             vector<MGLfloat> &proj_matrix = projection_matrixStack.back();
             //multiply by projection matrix,
-            vector<MGLfloat> &modview_matrix = modelview_matrixStack.back();
-            for (unsigned i = 0; i < 4; i++) {
+            vertex v(0.0,0.0,0.0);
+            mult_matrix_vec(proj_matrix,v, x,y,z,1);
+            cerr << "projection matrix:" << endl;
+            for (unsigned i = 0; i < 16; i++) {
+                cerr << proj_matrix.at(i) << " ";
             }
-            vertexList.push_back(vertex(x,y,z,currentColor[0],
-                                              currentColor[1],
-                                              currentColor[2]));
+            cerr << endl;
+            cerr << "vertex after projection matrix:" << endl;
+            cerr << "v.x\t" << v.x << endl;
+            cerr << "v.y\t" << v.y << endl;
+            cerr << "v.z\t" << v.z << endl;
+            cerr << "v.w\t" << v.w << endl;
+            vector<MGLfloat> &modview_matrix = modelview_matrixStack.back();
+            cerr << "modelview matrix:" << endl;
+            for (unsigned i = 0; i < 16; i++) {
+                cerr << modview_matrix.at(i) << " ";
+            }
+            cerr << endl;
+            mult_matrix_vec(modview_matrix, v, v.x,v.y,v.z,v.w);
+            v.setColor(currentColor[0], currentColor[1], currentColor[2]);
+            cerr << "New Vertex: " << endl;
+            cerr << "x:\t" << v.x << endl
+                 << "y:\t" << v.y << endl
+                 << "z:\t" << v.z << endl;
+            vertexList.push_back(v);
         }
     }
     void setMatrixMode(MGLmatrix_mode mode) {
@@ -203,12 +253,10 @@ class MGLObject {
     }
     void pushMatrix() {
         if (mglMatrix_Mode == MGL_MODELVIEW) {
-            vector<MGLfloat> back = modelview_matrixStack.back();
-            modelview_matrixStack.push_back(back);
+            modelview_matrixStack.push_back(modelview_matrixStack.back());
         }
         else if (mglMatrix_Mode == MGL_PROJECTION) {
-            vector<MGLfloat> back = projection_matrixStack.back();
-            projection_matrixStack.push_back(back);
+            projection_matrixStack.push_back(projection_matrixStack.back());
         }
     }
     void popMatrix() {
@@ -218,7 +266,9 @@ class MGLObject {
             }
         }
         else if (mglMatrix_Mode == MGL_PROJECTION) {
-            projection_matrixStack.pop_back();
+            if (projection_matrixStack.size() > 1) {
+                projection_matrixStack.pop_back();
+            }
         }
     }
     void loadIdentity() {
@@ -237,25 +287,41 @@ class MGLObject {
         }
     }
     void multMatrix(const MGLfloat *matrix) {
+        cerr << "Matrix to be multiplied:" << endl;
+        for (unsigned i = 0; i < 16; i++) {
+            cerr << matrix[i] << " ";
+        }
+        cerr << endl;
         if (mglBeginCalled) {
             MGL_ERROR(GL_BEGIN_ERROR);
         }
-        vector<MGLfloat> mult_matrix(16);
+        vector<MGLfloat> mult_matrix(16,0);
         vector<MGLfloat> *back = NULL;
         if (mglMatrix_Mode == MGL_MODELVIEW)
             back = &(modelview_matrixStack.back());
         else if (mglMatrix_Mode == MGL_PROJECTION)
             back = &(projection_matrixStack.back());
+        cerr << "back matrix:" << endl;
+        for (unsigned i = 0; i < 16; i++) {
+            cerr << back->at(i) << " ";
+        }
+        cerr << endl;
         for (unsigned i = 0; i < 4; i++) {
-            for (unsigned j = 0; i < 4; i++) {
+            for (unsigned j = 0; j < 4; j++) {
                 MGLfloat sum = 0.0;
                 for (unsigned k = 0; k < 4; k++) {
                     sum += (back->at(i+4*k))*(matrix[k+4*j]);
                 }
                 mult_matrix.at(i+4*j) = sum;
+                cerr << "mult_matrix[" << i << "," << j << "] = " << mult_matrix.at(i+4*j) << endl;
             }
         }
-        *(back) = mult_matrix;
+        cerr << "Multiplied matrix:" << endl;
+        for (unsigned i = 0; i < mult_matrix.size(); i++) {
+            cerr << mult_matrix.at(i) << " ";
+        }
+        cerr << endl;
+        loadMatrix(&mult_matrix[0]);
     }
 
     void translate(MGLfloat x,
@@ -293,7 +359,28 @@ class MGLObject {
                   MGLfloat top,
                   MGLfloat near,
                   MGLfloat far) {
-        //TODO: Implement me!!
+        MGLfloat a,b,c,tx,ty,tz;
+        a = 2/(right-left);
+        b = 2/(top-bottom);
+        c = -2/(far-near);
+        tx = -(right+left)/(right-left);
+        ty = -(top+bottom)/(top-bottom);
+        tz = -(far+near)/(far-near);
+        cerr << "a:\t" << a << endl;
+        cerr << "b:\t" << b << endl;
+        cerr << "c:\t" << c << endl;
+        cerr << "tx:\t" << tx << endl;
+        cerr << "ty:\t" << ty << endl;
+        cerr << "tz:\t" << tz << endl;
+        vector<MGLfloat> ortho_matrix(16,0);
+        ortho_matrix.at(0) = a;
+        ortho_matrix.at(5) = b;
+        ortho_matrix.at(10) = c;
+        ortho_matrix.at(12) = tx;
+        ortho_matrix.at(13) = tx;
+        ortho_matrix.at(14) = tx;
+        ortho_matrix.at(15) = 1;
+        multMatrix(&ortho_matrix[0]);
     }
     void color(MGLbyte red,
                   MGLbyte green,
@@ -314,6 +401,7 @@ class MGLObject {
         MGL_SET_BLUE(pixel, 255);
         data[index] = pixel;
     }
+
 }
 
 void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel* data)
