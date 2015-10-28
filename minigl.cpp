@@ -30,13 +30,81 @@ const MGLfloat identity[16] = {1,0,0,0,
                                0,1,0,0,
                                0,0,1,0,
                                0,0,0,1};
+class vertex {
+  public:
+    MGLfloat x;
+    MGLfloat y;
+    MGLfloat z;
+    MGLfloat w;
+    MGLpixel color;
+
+    vertex();
+    vertex(MGLfloat x, MGLfloat y, MGLfloat z, 
+           MGLbyte red, MGLbyte green, MGLbyte blue) {
+        setValues(x,y,z,1);
+        setColor(red,green,blue);
+    }
+    vertex(const vertex& other)
+     : color(other.color) {
+        setValues(other.x, other.y, other.z, 1);
+    }
+    void setValues(int x, int y, int z) {
+        this->x = x;
+        this->y = y;
+        this->z = z;
+        this->w = 1;
+    }
+    void setValues(int x, int y, int z, int w) {
+        this->x = x;
+        this->y = y;
+        this->z = z;
+        this->w = w;
+    }
+    void setColor(MGLbyte red, MGLbyte green, MGLbyte blue) {
+        MGLpixel color=0;
+        MGL_SET_RED(color, red);
+        MGL_SET_GREEN(color, green);
+        MGL_SET_BLUE(color, blue);
+        this->color = color;
+    }
+};
+
+#define TRIANGLE 3
+#define QUADRILATERAL 4
+#define UNKNOWN_POLY -1
+class MGL_Polygon {
+    vector<vertex> vertices;
+  public:
+    MGL_Polygon(vertex A, vertex B, vertex C) {
+        vertices.push_back(A);
+        vertices.push_back(B);
+        vertices.push_back(C);
+    }
+    MGL_Polygon(vertex A, vertex B, vertex C, vertex D) {
+        vertices.push_back(A);
+        vertices.push_back(B);
+        vertices.push_back(C);
+        vertices.push_back(D);
+    }
+    vector<vertex> &getVertices() {
+        return vertices;
+    }
+    int polyType() {
+        int type = vertices.size();
+        if (type != TRIANGLE && type != QUADRILATERAL) {
+            type = UNKNOWN_POLY;
+        }
+        return type;
+    }
+};
 
 class MGLObject {
     bool mglBeginCalled;
     MGLpoly_mode mglPoly_Mode;
     MGLmatrix_mode mglMatrix_Mode;
 
-    vector<MGLfloat> vertexList;
+    vector<MGL_Polygon> polygonList;
+    vector<vertex> vertexList;
     vector< vector<MGLfloat> > projection_matrixStack;
     vector< vector<MGLfloat> > modelview_matrixStack;
 
@@ -48,9 +116,9 @@ class MGLObject {
         projection_matrixStack.at(0) = id;
         modelview_matrixStack.at(0) = id;
 
-        currentColor[0] = 1;
-        currentColor[1] = 1;
-        currentColor[2] = 1;
+        currentColor[0] = 255;
+        currentColor[1] = 255;
+        currentColor[2] = 255;
     }
     
     void readPixels(MGLsize width,
@@ -58,25 +126,29 @@ class MGLObject {
                        MGLpixel *data) {
         cout << "Reading pixels" << endl;
         //TODO: also do quadrilaterals
-        unsigned num_triangles = vertexList.size() / 9;
-        cout << "num pixels:\t" << vertexList.size() << endl;
-        for (unsigned i = 0; i < num_triangles; i += 9) {
-           draw_triangle(vertexList.at(i), vertexList.at(i+1),
-                         vertexList.at(i+2), vertexList.at(i+3),
-                         vertexList.at(i+4), vertexList.at(i+5),
-                         vertexList.at(i+6), vertexList.at(i+7),
-                         vertexList.at(i+8), width, height, data);
+        for (unsigned i = 0; i < polygonList.size(); i += 9) {
+            MGL_Polygon &polygon = polygonList.at(i);
+            if (polygon.polyType() == TRIANGLE) {
+                draw_triangle(polygon.getVertices().at(0),
+                              polygon.getVertices().at(1),
+                              polygon.getVertices().at(2),
+                              width, height, data);
+            }
+            else if (polygon.polyType() == QUADRILATERAL) {
+                draw_triangle(polygon.getVertices().at(0),
+                              polygon.getVertices().at(1),
+                              polygon.getVertices().at(2),
+                              width, height, data);
+                draw_triangle(polygon.getVertices().at(1),
+                              polygon.getVertices().at(2),
+                              polygon.getVertices().at(3),
+                              width, height, data);
+            }
         } 
         for (unsigned i = 0; i < width*height; i++ ) {
             if (data[i] != 0)
                 cout << "Pixel " << i << ":\t" << data[i] << endl;
         }
-        MGLpixel pixel = 0;
-        MGL_SET_RED(pixel, 255);
-        MGL_SET_GREEN(pixel, 255);
-        MGL_SET_BLUE(pixel, 255);
-        cout << "pixel:\t" << pixel << endl;
-        data[250] = pixel;
     }
    
     void begin(MGLpoly_mode mode) {
@@ -92,15 +164,38 @@ class MGLObject {
             MGL_ERROR(GL_END_ERROR);
         }
         mglBeginCalled = false;
+        if (mglPoly_Mode == MGL_TRIANGLES) {
+            for (unsigned i = 0; i < vertexList.size() / 3; i++) {
+                polygonList.push_back(MGL_Polygon(vertexList.at(i),
+                                                  vertexList.at(i+1),
+                                                  vertexList.at(i+2)));
+            }
+        }
+        else if (mglPoly_Mode == MGL_QUADS) {
+            for (unsigned i = 0; i < vertexList.size() / 4; i++) {
+                polygonList.push_back(MGL_Polygon(vertexList.at(i),
+                                                  vertexList.at(i+1),
+                                                  vertexList.at(i+2),
+                                                  vertexList.at(i+3)));
+            }
+        }
+        vertexList.erase(vertexList.begin(), vertexList.end());
     }
 
     void vertex3(MGLfloat x,
                     MGLfloat y,
                     MGLfloat z) {
         if (mglBeginCalled) {
-            vertexList.push_back(x);
-            vertexList.push_back(y);
-            vertexList.push_back(z);
+            MGLfloat vertice[4] = {x,y,z,1};
+            //multiply by camera matrix, which in this case is just identity
+            vector<MGLfloat> &proj_matrix = projection_matrixStack.back();
+            //multiply by projection matrix,
+            vector<MGLfloat> &modview_matrix = modelview_matrixStack.back();
+            for (unsigned i = 0; i < 4; i++) {
+            }
+            vertexList.push_back(vertex(x,y,z,currentColor[0],
+                                              currentColor[1],
+                                              currentColor[2]));
         }
     }
     void setMatrixMode(MGLmatrix_mode mode) {
@@ -210,8 +305,8 @@ class MGLObject {
         //currentColor[2] = blue;
     }
     void set_pixel(int x, int y, unsigned width, unsigned height, MGLpixel *data) {
-    //unsigned index = y*width + x;
-    unsigned index = x*height + y;
+    unsigned index = y*width+ x;
+    //unsigned index = x*height + y;
     if (index < width*height) {
         MGLpixel pixel = 0;
         MGL_SET_RED(pixel, 255);
@@ -221,23 +316,23 @@ class MGLObject {
     }
 }
 
-void draw_line(int x0, int y0, int x1, int y1, unsigned width, unsigned height, MGLpixel* data)
+void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel* data)
 {
-    float dx = x1 - x0;
-    float dy = y1 - y0;
+    float dx = v1.x - v0.x;
+    float dy = v1.y - v0.y;
     
     if (dx == 0) {
         if (dy == 0) {
-            set_pixel(x0, y0, width, height, data);
+            set_pixel(v0.x, v0.y, width, height, data);
             return;
         }
-        int x = x0;
+        int x = v0.x;
         if (dy > 0) {
-            for (int y = y0; y < y1; y++)
+            for (int y = v0.y; y < v1.y; y++)
                 set_pixel(x, y, width, height, data);
         }
         else if (dy < 0) {
-            for (int y = y0; y > y1; y--)
+            for (int y = v0.y; y > v1.y; y--)
                 set_pixel(x, y, width, height, data);
         }
         return;
@@ -247,16 +342,16 @@ void draw_line(int x0, int y0, int x1, int y1, unsigned width, unsigned height, 
     
     if (m <= 1 && m >= -1) {
         if (dx > 0) {
-            float y = y0;
-            for(int x = x0; x < x1; ++x) {
+            float y = v0.y;
+            for(int x = v0.x; x < v1.x; ++x) {
                 set_pixel(x, static_cast<int>(y + 0.5), width, height, data);
                 y += m;
             }
          }
 
         else if (dx < 0) {
-            float y = y0;
-            for(int x = x0; x > x1; --x) {
+            float y = v0.y;
+            for(int x = v0.x; x > v1.x; --x) {
                 set_pixel(x, static_cast<int>(y + 0.5), width, height, data);
                 y -= m;
             }
@@ -265,15 +360,15 @@ void draw_line(int x0, int y0, int x1, int y1, unsigned width, unsigned height, 
     else { // absolute value of slope is greater than 1
         // dy != 0 so we do not need to check it
         float m_inverse = dx/dy; // 1/m
-        float x = x0;
+        float x = v0.x;
         if (dy > 0) {
-            for (int y = y0; y < y1; ++y) {
+            for (int y = v0.y; y < v1.y; ++y) {
                  set_pixel(static_cast<int>(x + 0.5), y, width, height, data);
                  x += m_inverse;
             }
         }
         else { // dy < 0
-            for (int y = y0; y > y1; --y) {
+            for (int y = v0.y; y > v1.y; --y) {
                  set_pixel(static_cast<int>(x + 0.5), y, width, height, data);
                  x -= m_inverse;
             }
@@ -286,13 +381,11 @@ void draw_line(int x0, int y0, int x1, int y1, unsigned width, unsigned height, 
 /**
  * Helper function for drawing triangles
  */
-void draw_triangle(const int &x1, const int &y1, const int &z1,
-                   const int &x2, const int &y2, const int &z2,
-                   const int &x3, const int &y3, const int &z3,
+void draw_triangle(vertex &v1, vertex &v2, vertex &v3,
                    const int width, const int height, MGLpixel* data) {
-    draw_line(x1, y1, x2, y2, width, height, data);
-    draw_line(x3, y3, x2, y2, width, height, data);
-    draw_line(x1, y1, x3, y3, width, height, data);
+    draw_line(v1, v2, width, height, data);
+    draw_line(v1, v3, width, height, data);
+    draw_line(v2, v3, width, height, data);
 }
 };
 
