@@ -11,6 +11,9 @@
 #include <vector>
 #include "minigl.h"
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 using namespace std;
 
 /**
@@ -26,6 +29,7 @@ inline void MGL_ERROR(const char* description) {
  */
 const char* GL_BEGIN_ERROR = "ERROR: mglBegin already called. Must use function after call to mglEnd";
 const char* GL_END_ERROR = "ERROR: mglBegin not called";
+const char* GL_FRUSTUM_INVALID_VALUE_ERROR = "ERROR: invalid value sent to mglFrustum";
 const MGLfloat identity[16] = {1,0,0,0,
                                0,1,0,0,
                                0,0,1,0,
@@ -223,6 +227,13 @@ class MGLObject {
             vector<MGLfloat> &proj_matrix = projection_matrixStack.back();
             //multiply by projection matrix,
             vertex v(0.0,0.0,0.0);
+            vector<MGLfloat> &modview_matrix = modelview_matrixStack.back();
+            cerr << "modelview matrix:" << endl;
+            for (unsigned i = 0; i < 16; i++) {
+                cerr << modview_matrix.at(i) << " ";
+            }
+            cerr << endl;
+            mult_matrix_vec(modview_matrix, v, v.x,v.y,v.z,v.w);
             mult_matrix_vec(proj_matrix,v, x,y,z,1);
             v.applyW();
             cerr << "projection matrix:" << endl;
@@ -235,13 +246,7 @@ class MGLObject {
             cerr << "v.y\t" << v.y << endl;
             cerr << "v.z\t" << v.z << endl;
             cerr << "v.w\t" << v.w << endl;
-            vector<MGLfloat> &modview_matrix = modelview_matrixStack.back();
-            cerr << "modelview matrix:" << endl;
-            for (unsigned i = 0; i < 16; i++) {
-                cerr << modview_matrix.at(i) << " ";
-            }
-            cerr << endl;
-            mult_matrix_vec(modview_matrix, v, v.x,v.y,v.z,v.w);
+            
             v.setColor(currentColor[0], currentColor[1], currentColor[2]);
             cerr << "New Vertex: " << endl;
             cerr << "x:\t" << v.x << endl
@@ -313,7 +318,6 @@ class MGLObject {
     void translate(MGLfloat x,
                    MGLfloat y,
                    MGLfloat z) {
-        //TODO: Implement me!!
         MGLfloat trans_matrix[16] = {1,0,0,0,
                                      0,1,0,0,
                                      0,0,1,0,
@@ -324,12 +328,35 @@ class MGLObject {
                    MGLfloat x,
                    MGLfloat y,
                    MGLfloat z) {
-        //TODO: Implement me!!
+        MGLfloat normalizer = sqrt(x*x + y*y + z*z);
+        x /= normalizer;
+        y /= normalizer;
+        z /= normalizer;
+        MGLfloat c = cos(angle * M_PI / 180.0);
+        MGLfloat s = sin(angle * M_PI / 180.0);
+        MGLfloat r0 = x*x*(1-c)+c;
+        MGLfloat r1 = y*x*(1-c)+z*s;
+        MGLfloat r2 = x*z*(1-c)-y*s;
+	MGLfloat r4 = x*y*(1-c)-z*s;
+        MGLfloat r5 = y*y*(1-c)+c;
+	MGLfloat r6 = y*z*(1-c)+x*s;
+        MGLfloat r8 = x*z*(1-c)+y*s;
+        MGLfloat r9 = y*z*(1-c)-x*s;
+	MGLfloat r10 = z*z*(1-c)+c;
+        MGLfloat rotate_matrix[16] = {r0,r1,r2,0.0,
+                                      r4,r5,r6,0.0,
+                                      r8,r9,r10,0.0,
+                                      0.0,0.0,0.0,1.0};
+        multMatrix(rotate_matrix);
     }
     void scale(MGLfloat x,
                   MGLfloat y,
                   MGLfloat z) {
-        //TODO: Implement me!!
+        MGLfloat scale_matrix[16] = {x,0,0,0,
+                                     0,y,0,0,
+                                     0,0,z,0,
+                                     0,0,0,1};
+        multMatrix(scale_matrix);
     }
     void frustum(MGLfloat left,
                     MGLfloat right,
@@ -337,7 +364,20 @@ class MGLObject {
                     MGLfloat top,
                     MGLfloat near,
                     MGLfloat far) {
-        //TODO: Implement me!!
+        if (near <= 0.0 || far <= 0.0 || left == right || bottom == top || far == near)
+            MGL_ERROR(GL_FRUSTUM_INVALID_VALUE_ERROR);
+        MGLfloat f0, f5, A, B, C, D;
+        f0 = 2.0*near/(right - left);
+        f5 = 2.0*near/(top - bottom);
+        A = (right + left)/(right - left);
+        B = (top + bottom)/(top - bottom);
+        C = -(far + near)/(far - near);
+        D = -(2.0 * far * near)/(far - near);
+        MGLfloat frustum_matrix[16] = {f0,0.0,0.0,0.0,
+                                       0.0,f5,0.0,0.0,
+                                       A,  B, C, -1.0,
+                                       0.0,0.0,D,0.0};
+        multMatrix(frustum_matrix);
     }
     void ortho(MGLfloat left,
                   MGLfloat right,
@@ -352,30 +392,22 @@ class MGLObject {
         tx = -(right+left)/(right-left);
         ty = -(top+bottom)/(top-bottom);
         tz = -(far+near)/(far-near);
-        cerr << "a:\t" << a << endl;
-        cerr << "b:\t" << b << endl;
-        cerr << "c:\t" << c << endl;
-        cerr << "tx:\t" << tx << endl;
-        cerr << "ty:\t" << ty << endl;
-        cerr << "tz:\t" << tz << endl;
         vector<MGLfloat> ortho_matrix(16,0);
         ortho_matrix.at(0) = a;
         ortho_matrix.at(5) = b;
         ortho_matrix.at(10) = c;
         ortho_matrix.at(12) = tx;
-        ortho_matrix.at(13) = tx;
-        ortho_matrix.at(14) = tx;
+        ortho_matrix.at(13) = ty;
+        ortho_matrix.at(14) = tz;
         ortho_matrix.at(15) = 1;
         multMatrix(&ortho_matrix[0]);
     }
     void color(MGLbyte red,
                   MGLbyte green,
                   MGLbyte blue) {
-        //TODO: Implement me!!
-        //MGLbyte *currentColor = mgl.getCurrentColor();
-        //currentColor[0] = red;
-        //currentColor[1] = green;
-        //currentColor[2] = blue;
+        currentColor[0] = red;
+        currentColor[1] = green;
+        currentColor[2] = blue;
     }
     void set_pixel(int x, int y, unsigned width, unsigned height, MGLpixel *data) {
     unsigned index = y*width+ x;
