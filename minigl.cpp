@@ -410,18 +410,18 @@ class MGLObject {
         currentColor[1] = green;
         currentColor[2] = blue;
     }
-    void set_pixel(int x, int y, unsigned width, unsigned height, MGLpixel *data) {
-    unsigned index = y*width+ x;
-    //unsigned index = x*height + y;
-    if (index < width*height) {
-        MGLpixel pixel = 0;
-        MGL_SET_RED(pixel, 255);
-        MGL_SET_GREEN(pixel, 255);
-        MGL_SET_BLUE(pixel, 255);
-        data[index] = pixel;
+    void set_pixel(int x, int y, int width, int height, MGLpixel *data) {
+        if (x < width && y < height) {
+            int index = y*width+ x;
+            if (index < width*height) {
+                MGLpixel pixel = 0;
+                MGL_SET_RED(pixel, 255);
+                MGL_SET_GREEN(pixel, 255);
+                MGL_SET_BLUE(pixel, 255);
+                data[index] = pixel;
+            }
+        }
     }
-
-}
 
 void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel* data)
 {
