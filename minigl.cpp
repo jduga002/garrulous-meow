@@ -199,17 +199,17 @@ class MGLObject {
         mglBeginCalled = false;
         if (mglPoly_Mode == MGL_TRIANGLES) {
             for (unsigned i = 0; i < vertexList.size() / 3; i++) {
-                polygonList.push_back(MGL_Polygon(vertexList.at(i),
-                                                  vertexList.at(i+1),
-                                                  vertexList.at(i+2)));
+                polygonList.push_back(MGL_Polygon(vertexList.at(3*i),
+                                                  vertexList.at(3*i+1),
+                                                  vertexList.at(3*i+2)));
             }
         }
         else if (mglPoly_Mode == MGL_QUADS) {
             for (unsigned i = 0; i < vertexList.size() / 4; i++) {
-                polygonList.push_back(MGL_Polygon(vertexList.at(i),
-                                                  vertexList.at(i+1),
-                                                  vertexList.at(i+2),
-                                                  vertexList.at(i+3)));
+                polygonList.push_back(MGL_Polygon(vertexList.at(4*i),
+                                                  vertexList.at(4*i+1),
+                                                  vertexList.at(4*i+2),
+                                                  vertexList.at(4*i+3)));
             }
         }
         vertexList.erase(vertexList.begin(), vertexList.end());
