@@ -88,10 +88,6 @@ void mult_matrix_vec(vector<MGLfloat> &m, vertex &v, MGLfloat x, MGLfloat y, MGL
     v.y = m.at(1)*x+m.at(5)*y+m.at(9)*z+m.at(13)*w;
     v.z = m.at(2)*x+m.at(6)*y+m.at(10)*z+m.at(14)*w;
     v.w = m.at(3)*x+m.at(7)*y+m.at(11)*z+m.at(15)*w;
-    cerr << "x prime:\t" << v.x << endl;
-    cerr << "y prime:\t" << v.y << endl;
-    cerr << "z prime:\t" << v.z << endl;
-    cerr << "w prime:\t" << v.w << endl;
 }
 
 #define TRIANGLE 3
@@ -156,14 +152,18 @@ class MGLObject {
         view_trans_matrix.at(12) = (width-1)/2;
         view_trans_matrix.at(13) = (height-1)/2;
         view_trans_matrix.at(15) = 1;
+        cerr << "Number of polygons:" << polygonList.size() << endl;
+        int i = 0;
         for (vector<MGL_Polygon>::iterator pIter = polygonList.begin();
              pIter != polygonList.end(); pIter++) {
+            cerr << "Polygon:\t" << i << endl;
             for (vector<vertex>::iterator vIter = pIter->getVertices().begin();
                  vIter != pIter->getVertices().end(); vIter++) {
                 mult_matrix_vec(view_trans_matrix, *vIter, vIter->x, vIter->y, vIter->z, vIter->w);
             }
+            i++;
         }
-        for (unsigned i = 0; i < polygonList.size(); i += 9) {
+        for (unsigned i = 0; i < polygonList.size(); i ++) {
             MGL_Polygon &polygon = polygonList.at(i);
             if (polygon.polyType() == TRIANGLE) {
                 draw_triangle(polygon.getVertices().at(0),
@@ -233,8 +233,13 @@ class MGLObject {
                 cerr << modview_matrix.at(i) << " ";
             }
             cerr << endl;
-            mult_matrix_vec(modview_matrix, v, v.x,v.y,v.z,v.w);
-            mult_matrix_vec(proj_matrix,v, x,y,z,1);
+            mult_matrix_vec(modview_matrix, v, x,y,z,1);
+            cerr << "vertex after modelview matrix:" << endl;
+            cerr << "v.x\t" << v.x << endl;
+            cerr << "v.y\t" << v.y << endl;
+            cerr << "v.z\t" << v.z << endl;
+            cerr << "v.w\t" << v.w << endl;
+            mult_matrix_vec(proj_matrix,v, v.x,v.y,v.z,v.w);
             v.applyW();
             cerr << "projection matrix:" << endl;
             for (unsigned i = 0; i < 16; i++) {
@@ -248,10 +253,6 @@ class MGLObject {
             cerr << "v.w\t" << v.w << endl;
             
             v.setColor(currentColor[0], currentColor[1], currentColor[2]);
-            cerr << "New Vertex: " << endl;
-            cerr << "x:\t" << v.x << endl
-                 << "y:\t" << v.y << endl
-                 << "z:\t" << v.z << endl;
             vertexList.push_back(v);
         }
     }
