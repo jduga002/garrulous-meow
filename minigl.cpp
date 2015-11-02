@@ -391,31 +391,7 @@ class MGLObject {
         }
     }
 
-    /**
-     * Helper function for drawing triangles
-     */
-    void draw_triangle(vertex &A, vertex &B, vertex &C,
-                       const int width, const int height, MGLpixel* data) {
-        int min_x = min(min(A.x + 0.5, B.x + 0.5), C.x + 0.5);
-        int max_x = max(max(A.x + 0.5, B.x + 0.5), C.x + 0.5);
-        int min_y = min(min(A.y + 0.5, B.y + 0.5), C.y + 0.5);
-        int max_y = max(max(A.y + 0.5, B.y + 0.5), C.y + 0.5);
-
-        for (int x = min_x; x <= max_x; x++) {
-            for (int y = min_y; y <= max_y; y++) {
-                MGLfloat alpha = bary_centric(B,C,x,y)/bary_centric(B,C,A.x,A.y);
-                MGLfloat beta  = bary_centric(C,A,x,y)/bary_centric(C,A,B.x,B.y);
-                MGLfloat gamma = bary_centric(A,B,x,y)/bary_centric(A,B,C.x,C.y);
-                if (alpha >= 0 && beta >= 0 && gamma >= 0) {
-                    MGLbyte red = alpha * A.red + beta * B.red + gamma * C.red + 0.5;
-                    MGLbyte green = alpha * A.green + beta * B.green + gamma * C.green + 0.5;
-                    MGLbyte blue = alpha * A.blue + beta * B.blue + gamma * C.blue + 0.5;
-                    MGLfloat z = alpha * A.z + beta * B.z + gamma * C.z;
-                    set_pixel(x,y,z, red, green, blue, width, height, data);
-                }
-            }
-        }
-    }
+    
 
   private:
     void viewportTransform(const int width, const int height) {
@@ -434,6 +410,35 @@ class MGLObject {
                 mult_matrix_vec(view_trans_matrix, *vIter, vIter->x, vIter->y, vIter->z, vIter->w);
             }
             i++;
+        }
+    }
+    /**
+     * Helper function for drawing triangles
+     */
+    void draw_triangle(vertex &A, vertex &B, vertex &C,
+                       const int width, const int height, MGLpixel* data) {
+        int min_x = min(min(A.x + 0.5, B.x + 0.5), C.x + 0.5);
+        int max_x = max(max(A.x + 0.5, B.x + 0.5), C.x + 0.5);
+        int min_y = min(min(A.y + 0.5, B.y + 0.5), C.y + 0.5);
+        int max_y = max(max(A.y + 0.5, B.y + 0.5), C.y + 0.5);
+
+        MGLfloat bary_BC = bary_centric(B,C,A.x,A.y);
+        MGLfloat bary_CA = bary_centric(C,A,B.x,B.y);
+        MGLfloat bary_AB = bary_centric(A,B,C.x,C.y);
+
+        for (int x = min_x; x <= max_x; x++) {
+            for (int y = min_y; y <= max_y; y++) {
+                MGLfloat alpha = bary_centric(B,C,x,y)/bary_BC;
+                MGLfloat beta  = bary_centric(C,A,x,y)/bary_CA;
+                MGLfloat gamma = bary_centric(A,B,x,y)/bary_AB;
+                if (alpha >= 0 && beta >= 0 && gamma >= 0) {
+                    MGLbyte red = alpha * A.red + beta * B.red + gamma * C.red + 0.5;
+                    MGLbyte green = alpha * A.green + beta * B.green + gamma * C.green + 0.5;
+                    MGLbyte blue = alpha * A.blue + beta * B.blue + gamma * C.blue + 0.5;
+                    MGLfloat z = alpha * A.z + beta * B.z + gamma * C.z;
+                    set_pixel(x,y,z, red, green, blue, width, height, data);
+                }
+            }
         }
     }
     MGLfloat bary_centric(const vertex &v0, const vertex &v1, MGLfloat x, MGLfloat y) {
