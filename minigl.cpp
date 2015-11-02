@@ -9,10 +9,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+#include <algorithm>
 #include "minigl.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+
+#define Z_NOT_SET 5
 
 using namespace std;
 
@@ -130,6 +133,8 @@ class MGLObject {
     vector< vector<MGLfloat> > modelview_matrixStack;
 
     MGLbyte currentColor[3];
+
+    vector<MGLfloat> zBuffer;
   public:
     MGLObject()
      : mglBeginCalled(false), projection_matrixStack(1), modelview_matrixStack(1) {
@@ -145,24 +150,10 @@ class MGLObject {
     void readPixels(MGLsize width,
                        MGLsize height,
                        MGLpixel *data) {
-        vector<MGLfloat> view_trans_matrix(16,0);
-        view_trans_matrix.at(0) = width/2;
-        view_trans_matrix.at(5) = height/2;
-        view_trans_matrix.at(10) = 1;
-        view_trans_matrix.at(12) = (width-1)/2;
-        view_trans_matrix.at(13) = (height-1)/2;
-        view_trans_matrix.at(15) = 1;
-        cerr << "Number of polygons:" << polygonList.size() << endl;
-        int i = 0;
-        for (vector<MGL_Polygon>::iterator pIter = polygonList.begin();
-             pIter != polygonList.end(); pIter++) {
-            cerr << "Polygon:\t" << i << endl;
-            for (vector<vertex>::iterator vIter = pIter->getVertices().begin();
-                 vIter != pIter->getVertices().end(); vIter++) {
-                mult_matrix_vec(view_trans_matrix, *vIter, vIter->x, vIter->y, vIter->z, vIter->w);
-            }
-            i++;
-        }
+        viewportTransform(width, height);
+
+        zBuffer.resize(width*height, Z_NOT_SET);
+        
         for (unsigned i = 0; i < polygonList.size(); i ++) {
             MGL_Polygon &polygon = polygonList.at(i);
             if (polygon.polyType() == TRIANGLE) {
@@ -218,39 +209,15 @@ class MGLObject {
     void vertex3(MGLfloat x,
                     MGLfloat y,
                     MGLfloat z) {
-        cerr << "Vertex: " << endl;
-        cerr << "x:\t" << x << endl
-             << "y:\t" << y << endl
-             << "z:\t" << z << endl;
         if (mglBeginCalled) {
             //multiply by camera matrix, which in this case is just identity
             vector<MGLfloat> &proj_matrix = projection_matrixStack.back();
             //multiply by projection matrix,
             vertex v(0.0,0.0,0.0);
             vector<MGLfloat> &modview_matrix = modelview_matrixStack.back();
-            cerr << "modelview matrix:" << endl;
-            for (unsigned i = 0; i < 16; i++) {
-                cerr << modview_matrix.at(i) << " ";
-            }
-            cerr << endl;
             mult_matrix_vec(modview_matrix, v, x,y,z,1);
-            cerr << "vertex after modelview matrix:" << endl;
-            cerr << "v.x\t" << v.x << endl;
-            cerr << "v.y\t" << v.y << endl;
-            cerr << "v.z\t" << v.z << endl;
-            cerr << "v.w\t" << v.w << endl;
             mult_matrix_vec(proj_matrix,v, v.x,v.y,v.z,v.w);
             v.applyW();
-            cerr << "projection matrix:" << endl;
-            for (unsigned i = 0; i < 16; i++) {
-                cerr << proj_matrix.at(i) << " ";
-            }
-            cerr << endl;
-            cerr << "vertex after projection matrix:" << endl;
-            cerr << "v.x\t" << v.x << endl;
-            cerr << "v.y\t" << v.y << endl;
-            cerr << "v.z\t" << v.z << endl;
-            cerr << "v.w\t" << v.w << endl;
             
             v.setColor(currentColor[0], currentColor[1], currentColor[2]);
             vertexList.push_back(v);
@@ -410,20 +377,23 @@ class MGLObject {
         currentColor[1] = green;
         currentColor[2] = blue;
     }
-    void set_pixel(int x, int y, int width, int height, MGLpixel *data) {
+    void set_pixel(int x, int y, MGLfloat z,
+                   MGLbyte red, MGLbyte green, MGLbyte blue,
+                   int width, int height, MGLpixel *data) {
         if (x < width && y < height) {
             int index = y*width+ x;
-            if (index < width*height) {
+            if (index < width*height && z < zBuffer.at(index)) {
                 MGLpixel pixel = 0;
-                MGL_SET_RED(pixel, 255);
-                MGL_SET_GREEN(pixel, 255);
-                MGL_SET_BLUE(pixel, 255);
+                MGL_SET_RED(pixel, red);
+                MGL_SET_GREEN(pixel, green);
+                MGL_SET_BLUE(pixel, blue);
                 data[index] = pixel;
+                zBuffer.at(index) = z;
             }
         }
     }
 
-void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel* data)
+/*void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel* data)
 {
     float dx = v1.x - v0.x;
     float dy = v1.y - v0.y;
@@ -483,17 +453,84 @@ void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel
     }
 
     return;
-}
+    }*/
 
-/**
- * Helper function for drawing triangles
- */
-void draw_triangle(vertex &v1, vertex &v2, vertex &v3,
-                   const int width, const int height, MGLpixel* data) {
-    draw_line(v1, v2, width, height, data);
-    draw_line(v1, v3, width, height, data);
-    draw_line(v2, v3, width, height, data);
-}
+    /**
+     * Helper function for drawing triangles
+     */
+    void draw_triangle(vertex &A, vertex &B, vertex &C,
+                       const int width, const int height, MGLpixel* data) {
+        cout << "Vertex:\tx\ty\tz" << endl;
+        cout << "A\t" << A.x << "\t" << A.y << "\t" << A.z << endl;
+        cout << "B\t" << B.x << "\t" << B.y << "\t" << B.z << endl;
+        cout << "C\t" << C.x << "\t" << C.y << "\t" << C.z << endl;
+        ///*
+        int min_x = min(min(A.x + 0.5, B.x + 0.5), C.x + 0.5);
+        int max_x = max(max(A.x + 0.5, B.x + 0.5), C.x + 0.5);
+        int min_y = min(min(A.y + 0.5, B.y + 0.5), C.y + 0.5);
+        int max_y = max(max(A.y + 0.5, B.y + 0.5), C.y + 0.5);
+
+        cout << "x min:\t" << min_x << endl;
+        cout << "y min:\t" << min_y << endl;
+        cout << "x max:\t" << max_x << endl;
+        cout << "y max:\t" << max_y << endl;
+
+        cout << endl;
+
+        MGLbyte red_A = MGL_GET_RED(A.color);
+        MGLbyte green_A = MGL_GET_GREEN(A.color);
+        MGLbyte blue_A = MGL_GET_BLUE(A.color);
+        MGLbyte red_B = MGL_GET_RED(B.color);
+        MGLbyte green_B = MGL_GET_GREEN(B.color);
+        MGLbyte blue_B = MGL_GET_BLUE(B.color);
+        MGLbyte red_C = MGL_GET_RED(C.color);
+        MGLbyte green_C = MGL_GET_GREEN(C.color);
+        MGLbyte blue_C = MGL_GET_BLUE(C.color);
+
+        for (int x = min_x; x <= max_x; x++) {
+            for (int y = min_y; y <= max_y; y++) {
+                MGLfloat alpha = bary_centric(B,C,x,y)/bary_centric(B,C,A.x,A.y);
+                MGLfloat beta  = bary_centric(C,A,x,y)/bary_centric(C,A,B.x,B.y);
+                MGLfloat gamma = bary_centric(A,B,x,y)/bary_centric(A,B,C.x,C.y);
+                if (alpha >= 0 && beta >= 0 && gamma >= 0) {
+                    MGLbyte red = alpha * red_A + beta * red_B + gamma * red_C;
+                    MGLbyte green = alpha * green_A + beta * green_B + gamma * green_C;
+                    MGLbyte blue = alpha * blue_A + beta * blue_B + gamma * blue_C;
+                    MGLfloat z = alpha * A.z + beta * B.z + gamma * C.z;
+                    set_pixel(x,y,z, red, green, blue, width, height, data);
+                }
+            }
+        }
+        //*/
+        /*
+        draw_line(A, B, width, height, data);
+        draw_line(A, C, width, height, data);
+        draw_line(B, C, width, height, data);
+        */
+    }
+
+  private:
+    void viewportTransform(const int width, const int height) {
+        vector<MGLfloat> view_trans_matrix(16,0);
+        view_trans_matrix.at(0) = width/2;
+        view_trans_matrix.at(5) = height/2;
+        view_trans_matrix.at(10) = 1;
+        view_trans_matrix.at(12) = (width-1)/2;
+        view_trans_matrix.at(13) = (height-1)/2;
+        view_trans_matrix.at(15) = 1;
+        int i = 0;
+        for (vector<MGL_Polygon>::iterator pIter = polygonList.begin();
+             pIter != polygonList.end(); pIter++) {
+            for (vector<vertex>::iterator vIter = pIter->getVertices().begin();
+                 vIter != pIter->getVertices().end(); vIter++) {
+                mult_matrix_vec(view_trans_matrix, *vIter, vIter->x, vIter->y, vIter->z, vIter->w);
+            }
+            i++;
+        }
+    }
+    MGLfloat bary_centric(const vertex &v0, const vertex &v1, int x, int y) {
+        return ((v0.y-v1.y)*x + (v1.x-v0.x)*y + v0.x*v1.y - v1.x*v0.y);
+    }
 };
 
 static MGLObject mgl;
