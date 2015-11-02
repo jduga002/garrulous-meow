@@ -391,74 +391,11 @@ class MGLObject {
         }
     }
 
-/*void draw_line(vertex& v0, vertex& v1, unsigned width, unsigned height, MGLpixel* data)
-{
-    float dx = v1.x - v0.x;
-    float dy = v1.y - v0.y;
-    
-    if (dx == 0) {
-        if (dy == 0) {
-            set_pixel(v0.x, v0.y, width, height, data);
-            return;
-        }
-        int x = v0.x;
-        if (dy > 0) {
-            for (int y = v0.y; y < v1.y; y++)
-                set_pixel(x, y, width, height, data);
-        }
-        else if (dy < 0) {
-            for (int y = v0.y; y > v1.y; y--)
-                set_pixel(x, y, width, height, data);
-        }
-        return;
-    }
-
-    float m = dy/dx;
-    
-    if (m <= 1 && m >= -1) {
-        if (dx > 0) {
-            float y = v0.y;
-            for(int x = v0.x; x < v1.x; ++x) {
-                set_pixel(x, static_cast<int>(y + 0.5), width, height, data);
-                y += m;
-            }
-         }
-
-        else if (dx < 0) {
-            float y = v0.y;
-            for(int x = v0.x; x > v1.x; --x) {
-                set_pixel(x, static_cast<int>(y + 0.5), width, height, data);
-                y -= m;
-            }
-        }
-    }
-    else { // absolute value of slope is greater than 1
-        // dy != 0 so we do not need to check it
-        float m_inverse = dx/dy; // 1/m
-        float x = v0.x;
-        if (dy > 0) {
-            for (int y = v0.y; y < v1.y; ++y) {
-                 set_pixel(static_cast<int>(x + 0.5), y, width, height, data);
-                 x += m_inverse;
-            }
-        }
-        else { // dy < 0
-            for (int y = v0.y; y > v1.y; --y) {
-                 set_pixel(static_cast<int>(x + 0.5), y, width, height, data);
-                 x -= m_inverse;
-            }
-        }
-    }
-
-    return;
-    }*/
-
     /**
      * Helper function for drawing triangles
      */
     void draw_triangle(vertex &A, vertex &B, vertex &C,
                        const int width, const int height, MGLpixel* data) {
-        ///*
         int min_x = min(min(A.x + 0.5, B.x + 0.5), C.x + 0.5);
         int max_x = max(max(A.x + 0.5, B.x + 0.5), C.x + 0.5);
         int min_y = min(min(A.y + 0.5, B.y + 0.5), C.y + 0.5);
@@ -478,12 +415,6 @@ class MGLObject {
                 }
             }
         }
-        //*/
-        /*
-        draw_line(A, B, width, height, data);
-        draw_line(A, C, width, height, data);
-        draw_line(B, C, width, height, data);
-        */
     }
 
   private:
