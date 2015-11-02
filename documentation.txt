@@ -1,0 +1,73 @@
+To implement MiniOpenGL, I created a class called MGLObject that keeps track of 
+the list of polygons/vertices added, as well as the modelview and projection    
+matrix stacks, etc. Then each MiniOpenGL function calls the corresponding
+function in the MGLObject class. So for the description of each MiniOpenGL 
+function, I will describe the corresponding function in MGLObject.
+
+void mglReadPixels:
+First, we transform the vertices of every with the viewport transform matrix.   
+Then, we initialize the z buffer, and then for each polygon, we draw it using   
+barycentric coordinates to determine the color of each pixel. Quadrilaterals are
+drawn as two triangles.                                                         
+
+void mglBegin:
+Set the mode to determine if we are adding triangles or quadrilaterals.         
+
+void mglEnd:
+Convert the vertices added after calls to mglBegin into polygons. If the mode is
+MGL_TRIANGLES, every 3 vertices becomes a polygon, while if the mode is         
+MGL_QUADS, every  4 vertices becomes a polygon.                                 
+
+void mglVertex2:
+Call mglVertex3(x, y, 0.0).
+
+void mglVertex3:
+First, multiply the vertex by the matrix on top of modelview matrix stack. Then,
+multiply the vertex by the matrix on top of projection matrix stack. Then divide
+by the w coordinate, and set its color to the current color, and add the vertex 
+to the end of the vertex list.                                                  
+
+void mglMatrixMode:
+Set the matrix mode stored in MGLObject.                                        
+
+void mglPushMatrix:
+Depending on which mode it is currently, make a copy of the back element of the 
+corresponding matrix stack and push it on the back of the stack.                
+
+void mglPopMatrix:
+Depending on the current matrix mode, if the corresponding matrix stack is not  
+empty, then pop the back element.                                               
+
+void mglLoadIdentity:
+Call mglLoadMatrix on the identity matrix.                                      
+
+void mglLoadMatrix(const MGLfloat matrix);
+Depending on the current matrix mode, replace the matrix on the back with the   
+matrix passed in.                                                               
+
+void mglMultMatrix:
+Depending on the current matrix mode, take the matrix on the back of the corre- 
+sponding stack and multiply the matrix passed in on the right.  Then call       
+mglLoadMatrix on the resulting matrix.                                          
+
+void mglTranslate:
+Call mglMultMatrix with the translation matrix given by the OpenGL documentation.
+
+void mglRotate:
+Call mglMultMatrix with the rotation matrix given by the OpenGL documentation.  
+
+void mglScale:
+Call mglMultMatrix with the scale matrix given by the OpenGL documentation.     
+
+void mglFrustum:
+Call mglMultMatrix with the frustum matrix given by the OpenGL documentation.   
+
+void mglOrtho:
+Call mglMultMatrix with the orthographic matrix given by the OpenGL documentation.
+
+void mglColor:
+Set the current color stored in MGLOBject as an array of MGLbyte of length 3.   
+
+Problems with my implementation:
+In cases 4 and 5, you can see that the edges of some of the objects are slightly
+off. This is probably caused by some rounding error in implementing the z buffer.
