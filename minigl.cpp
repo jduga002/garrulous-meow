@@ -44,7 +44,7 @@ class vertex {
     MGLfloat y;
     MGLfloat z;
     MGLfloat w;
-    MGLpixel color;
+    MGLbyte red, green, blue;
 
     vertex();
     vertex(MGLfloat x, MGLfloat y, MGLfloat z, 
@@ -71,11 +71,9 @@ class vertex {
         this->w = w;
     }
     void setColor(MGLbyte red, MGLbyte green, MGLbyte blue) {
-        MGLpixel color=0;
-        MGL_SET_RED(color, red);
-        MGL_SET_GREEN(color, green);
-        MGL_SET_BLUE(color, blue);
-        this->color = color;
+        this->red = red;
+        this->green = green;
+        this->blue = blue;
     }
     void applyW() {
         x /= w;
@@ -371,8 +369,8 @@ class MGLObject {
         multMatrix(&ortho_matrix[0]);
     }
     void color(MGLbyte red,
-                  MGLbyte green,
-                  MGLbyte blue) {
+               MGLbyte green,
+               MGLbyte blue) {
         currentColor[0] = red;
         currentColor[1] = green;
         currentColor[2] = blue;
@@ -460,32 +458,11 @@ class MGLObject {
      */
     void draw_triangle(vertex &A, vertex &B, vertex &C,
                        const int width, const int height, MGLpixel* data) {
-        cout << "Vertex:\tx\ty\tz" << endl;
-        cout << "A\t" << A.x << "\t" << A.y << "\t" << A.z << endl;
-        cout << "B\t" << B.x << "\t" << B.y << "\t" << B.z << endl;
-        cout << "C\t" << C.x << "\t" << C.y << "\t" << C.z << endl;
         ///*
         int min_x = min(min(A.x + 0.5, B.x + 0.5), C.x + 0.5);
         int max_x = max(max(A.x + 0.5, B.x + 0.5), C.x + 0.5);
         int min_y = min(min(A.y + 0.5, B.y + 0.5), C.y + 0.5);
         int max_y = max(max(A.y + 0.5, B.y + 0.5), C.y + 0.5);
-
-        cout << "x min:\t" << min_x << endl;
-        cout << "y min:\t" << min_y << endl;
-        cout << "x max:\t" << max_x << endl;
-        cout << "y max:\t" << max_y << endl;
-
-        cout << endl;
-
-        MGLbyte red_A = MGL_GET_RED(A.color);
-        MGLbyte green_A = MGL_GET_GREEN(A.color);
-        MGLbyte blue_A = MGL_GET_BLUE(A.color);
-        MGLbyte red_B = MGL_GET_RED(B.color);
-        MGLbyte green_B = MGL_GET_GREEN(B.color);
-        MGLbyte blue_B = MGL_GET_BLUE(B.color);
-        MGLbyte red_C = MGL_GET_RED(C.color);
-        MGLbyte green_C = MGL_GET_GREEN(C.color);
-        MGLbyte blue_C = MGL_GET_BLUE(C.color);
 
         for (int x = min_x; x <= max_x; x++) {
             for (int y = min_y; y <= max_y; y++) {
@@ -493,9 +470,9 @@ class MGLObject {
                 MGLfloat beta  = bary_centric(C,A,x,y)/bary_centric(C,A,B.x,B.y);
                 MGLfloat gamma = bary_centric(A,B,x,y)/bary_centric(A,B,C.x,C.y);
                 if (alpha >= 0 && beta >= 0 && gamma >= 0) {
-                    MGLbyte red = alpha * red_A + beta * red_B + gamma * red_C;
-                    MGLbyte green = alpha * green_A + beta * green_B + gamma * green_C;
-                    MGLbyte blue = alpha * blue_A + beta * blue_B + gamma * blue_C;
+                    MGLbyte red = alpha * A.red + beta * B.red + gamma * C.red + 0.5;
+                    MGLbyte green = alpha * A.green + beta * B.green + gamma * C.green + 0.5;
+                    MGLbyte blue = alpha * A.blue + beta * B.blue + gamma * C.blue + 0.5;
                     MGLfloat z = alpha * A.z + beta * B.z + gamma * C.z;
                     set_pixel(x,y,z, red, green, blue, width, height, data);
                 }
@@ -528,7 +505,7 @@ class MGLObject {
             i++;
         }
     }
-    MGLfloat bary_centric(const vertex &v0, const vertex &v1, int x, int y) {
+    MGLfloat bary_centric(const vertex &v0, const vertex &v1, MGLfloat x, MGLfloat y) {
         return ((v0.y-v1.y)*x + (v1.x-v0.x)*y + v0.x*v1.y - v1.x*v0.y);
     }
 };
